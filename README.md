@@ -38,6 +38,21 @@ make package/luci-app-socks-proxy/compile V=s
 The package is architecture independent, while the installed `sing-box`
 dependency must match the router architecture.
 
+The included GitHub Actions workflow builds against the official ImmortalWrt
+25.12.1 `rockchip/armv8` SDK and verifies the SDK SHA-256 checksum before use.
+
+## Install the release APK
+
+Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
+APK to the router and install it with:
+
+```sh
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.1.0-r1.apk
+```
+
+The package itself is architecture independent. Its dependencies, especially
+`sing-box`, must come from repositories compatible with the router firmware.
+
 ## Configuration
 
 1. Open **Services → SOCKS/HTTP Proxy → Import** to paste share links or add a
