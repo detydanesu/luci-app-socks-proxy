@@ -57,6 +57,11 @@ jobs:
             --exclude '.github' \
             "$GITHUB_WORKSPACE/" \
             "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/"
+          test -x "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/root/etc/init.d/socks-proxy"
+          test -x "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/root/usr/libexec/socks-proxy/generate.uc"
+          test -x "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/root/usr/libexec/socks-proxy/import"
+          test -x "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/root/usr/libexec/socks-proxy/import.uc"
+          test -x "$RUNNER_TEMP/immortalwrt-sdk/package/luci-app-socks-proxy/root/usr/libexec/socks-proxy/status"
 
       - name: Build APK
         working-directory: ${{ runner.temp }}/immortalwrt-sdk
@@ -77,7 +82,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-socks-proxy-0.1.0-r1
+          name: luci-app-socks-proxy-0.1.0-r2
           path: |
             dist/*.apk
             dist/SHA256SUMS
