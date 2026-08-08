@@ -1,0 +1,25 @@
+{
+	"luci-app-socks-proxy": {
+		"description": "Grant access to the SOCKS/HTTP proxy service",
+		"read": {
+			"file": {
+				"/tmp/socks-proxy-import.txt": [ "read" ],
+				"/usr/libexec/socks-proxy/status": [ "exec" ],
+				"/usr/libexec/socks-proxy/import": [ "exec" ],
+				"/etc/init.d/socks-proxy status": [ "exec" ]
+			},
+			"uci": [ "socks-proxy" ]
+		},
+		"write": {
+			"file": {
+				"/tmp/socks-proxy-import.txt": [ "write" ],
+				"/usr/libexec/socks-proxy/import": [ "exec" ],
+				"/etc/init.d/socks-proxy start": [ "exec" ],
+				"/etc/init.d/socks-proxy stop": [ "exec" ],
+				"/etc/init.d/socks-proxy restart": [ "exec" ],
+				"/etc/init.d/socks-proxy reload": [ "exec" ]
+			},
+			"uci": [ "socks-proxy" ]
+		}
+	}
+}

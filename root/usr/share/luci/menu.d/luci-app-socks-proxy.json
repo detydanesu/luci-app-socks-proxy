@@ -1,0 +1,45 @@
+{
+	"admin/services/socks-proxy": {
+		"title": "SOCKS/HTTP 代理",
+		"order": 45,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-socks-proxy" ],
+			"uci": { "socks-proxy": true }
+		}
+	},
+	"admin/services/socks-proxy/overview": {
+		"title": "设置",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "socks-proxy/overview"
+		}
+	},
+	"admin/services/socks-proxy/nodes": {
+		"title": "节点",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "socks-proxy/nodes"
+		}
+	},
+	"admin/services/socks-proxy/import": {
+		"title": "导入",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "socks-proxy/import"
+		}
+	},
+	"admin/services/socks-proxy/status": {
+		"title": "状态",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "socks-proxy/status"
+		}
+	}
+}

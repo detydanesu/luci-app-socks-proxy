@@ -1,0 +1,65 @@
+#!/bin/sh
+
+IMPORTER='/usr/libexec/socks-proxy/import.uc'
+mode="$1"
+
+case "$mode" in
+	file)
+	input="$2"
+	replace_existing="$3"
+	[ "$input" = '/tmp/socks-proxy-import.txt' ] || {
+		echo '{"success":false,"error":"无效的导入文件"}'
+		exit 2
+	}
+	[ -f "$input" ] || {
+		echo '{"success":false,"error":"导入文件不存在"}'
+		exit 2
+	}
+	trap 'rm -f /tmp/socks-proxy-import.txt' EXIT INT TERM
+	/usr/bin/ucode -D mode=file -D "replace_existing=$replace_existing" \
+		-D "input_path=$input" "$IMPORTER"
+	;;
+
+	subscription|subscription-url)
+	section="$2"
+	case "$section" in
+		''|*[!A-Za-z0-9_]*)
+			echo '{"success":false,"error":"无效的订阅配置"}'
+			exit 2
+		;;
+	esac
+
+	if [ "$mode" = 'subscription-url' ]; then
+		url="$3"
+	else
+		url="$(uci -q get "socks-proxy.$section.url")"
+	fi
+	[ -n "$url" ] || {
+		echo '{"success":false,"error":"订阅地址不能为空"}'
+		exit 2
+	}
+	case "$url" in
+		http://*|https://*) ;;
+		*)
+			echo '{"success":false,"error":"订阅地址仅支持 HTTP 和 HTTPS"}'
+			exit 2
+		;;
+	esac
+
+	tmp="$(mktemp /tmp/socks-proxy-subscription.XXXXXX)" || exit 1
+	trap 'rm -f "$tmp"' EXIT INT TERM
+	if ! /usr/bin/curl --globoff --location --silent --show-error --fail \
+		--connect-timeout 10 --max-time 45 --output "$tmp" -- "$url"; then
+		echo '{"success":false,"error":"无法下载订阅"}'
+		exit 1
+	fi
+
+	/usr/bin/ucode -D mode=subscription -D "section=$section" \
+		-D "input_path=$tmp" "$IMPORTER"
+	;;
+
+	*)
+	echo '{"success":false,"error":"导入命令参数无效"}'
+	exit 2
+	;;
+esac

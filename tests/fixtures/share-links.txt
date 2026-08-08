@@ -1,0 +1,8 @@
+ss://YWVzLTEyOC1nY206dGVzdC1wYXNzd29yZA@example.com:8388#Shadowsocks%20test
+vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgdGVzdCIsImFkZCI6ImV4YW1wbGUuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUuY29tIiwicGF0aCI6Ii93cyIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUuY29tIn0
+vless://22222222-2222-2222-2222-222222222222@example.com:443?security=tls&sni=example.com&type=ws&host=example.com&path=%2Fvless#VLESS%20test
+trojan://trojan-test-password@example.com:443?security=tls&sni=example.com#Trojan%20test
+hysteria2://hy2-test-password@example.com:443?sni=example.com&insecure=1&obfs=salamander&obfs-password=obfs-test#Hysteria2%20test
+tuic://33333333-3333-3333-3333-333333333333:tuic-test-password@example.com:443?sni=example.com&congestion_control=bbr&udp_relay_mode=native#TUIC%20test
+socks5://upstream-user:upstream-password@example.com:1080#SOCKS5%20test
+https://http-user:http-password@example.com:8443#HTTPS%20test

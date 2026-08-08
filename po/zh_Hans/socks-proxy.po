@@ -1,0 +1,164 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "SOCKS/HTTP Proxy"
+msgstr "SOCKS/HTTP 代理"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Nodes"
+msgstr "节点"
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Service"
+msgstr "服务"
+
+msgid "Enable service"
+msgstr "启用服务"
+
+msgid "Log level"
+msgstr "日志级别"
+
+msgid "Bypass OpenClash"
+msgstr "绕过 OpenClash"
+
+msgid "Proxy listeners"
+msgstr "代理监听"
+
+msgid "Add listener"
+msgstr "添加监听"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Protocol"
+msgstr "协议"
+
+msgid "Outbound node"
+msgstr "出口节点"
+
+msgid "Access scope"
+msgstr "访问范围"
+
+msgid "This router only"
+msgstr "仅本机"
+
+msgid "LAN devices"
+msgstr "局域网设备"
+
+msgid "Listen port"
+msgstr "监听端口"
+
+msgid "Require authentication"
+msgstr "启用密码认证"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Proxy nodes"
+msgstr "代理节点"
+
+msgid "Add node"
+msgstr "添加节点"
+
+msgid "General"
+msgstr "常规"
+
+msgid "Protocol options"
+msgstr "协议选项"
+
+msgid "TLS and transport"
+msgstr "TLS 与传输"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Server"
+msgstr "服务器"
+
+msgid "Server port"
+msgstr "服务器端口"
+
+msgid "Password / credential"
+msgstr "密码/凭据"
+
+msgid "Enable TLS"
+msgstr "启用 TLS"
+
+msgid "TLS server name"
+msgstr "TLS 服务器名称"
+
+msgid "Allow insecure TLS"
+msgstr "允许不安全 TLS"
+
+msgid "Transport"
+msgstr "传输方式"
+
+msgid "Import nodes"
+msgstr "导入节点"
+
+msgid "Share links"
+msgstr "分享链接"
+
+msgid "Links"
+msgstr "链接"
+
+msgid "Replace all existing nodes"
+msgstr "替换全部现有节点"
+
+msgid "Import now"
+msgstr "立即导入"
+
+msgid "Subscriptions"
+msgstr "订阅"
+
+msgid "Add subscription"
+msgstr "添加订阅"
+
+msgid "Subscription URL"
+msgstr "订阅地址"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Socket group"
+msgstr "Socket 进程组"
+
+msgid "OpenClash bypass active"
+msgstr "OpenClash 旁路已生效"
+
+msgid "OpenClash bypass inactive"
+msgstr "OpenClash 旁路未生效"
+
+msgid "Configured nodes"
+msgstr "已配置节点"
+
+msgid "Configured listeners"
+msgstr "已配置监听"

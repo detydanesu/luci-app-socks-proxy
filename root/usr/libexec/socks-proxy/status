@@ -1,0 +1,26 @@
+#!/bin/sh
+
+CONFIG_FILE='/var/run/socks-proxy/config.json'
+pid=''
+
+for candidate in $(pidof sing-box 2>/dev/null); do
+	if tr '\0' ' ' < "/proc/$candidate/cmdline" 2>/dev/null | grep -q "$CONFIG_FILE"; then
+		pid="$candidate"
+		break
+	fi
+done
+
+if [ -n "$pid" ]; then
+	gid="$(awk '/^Gid:/ { print $2; exit }' "/proc/$pid/status" 2>/dev/null)"
+	echo 'running=1'
+	echo "pid=$pid"
+	echo "gid=${gid:-unknown}"
+else
+	echo 'running=0'
+	echo 'pid='
+	echo 'gid='
+fi
+
+echo "enabled=$(uci -q get socks-proxy.global.enabled || echo 0)"
+echo "nodes=$(uci show socks-proxy 2>/dev/null | grep -c '=node$')"
+echo "listeners=$(uci show socks-proxy 2>/dev/null | grep -c '=listener$')"
