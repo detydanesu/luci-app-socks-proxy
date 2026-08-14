@@ -33,6 +33,18 @@ function tls_config(node) {
 		server_name: node.server_name || node.server,
 		insecure: bool(node.insecure)
 	};
+	const alpn_value = node.tls_alpn || (node.type == 'tuic' ? 'h3' : '');
+	if (nonempty(alpn_value)) {
+		const values = split(alpn_value, ',');
+		const alpn = [];
+		for (let i = 0; i < length(values); i++) {
+			const value = trim(values[i]);
+			if (nonempty(value))
+				push(alpn, value);
+		}
+		if (length(alpn))
+			tls.alpn = alpn;
+	}
 
 	if (nonempty(node.utls_fingerprint))
 		tls.utls = { enabled: true, fingerprint: node.utls_fingerprint };

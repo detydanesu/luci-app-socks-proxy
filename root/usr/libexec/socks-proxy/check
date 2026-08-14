@@ -1,0 +1,207 @@
+#!/bin/sh
+
+MODE="$1"
+SECTION="$2"
+GENERATOR='/usr/libexec/socks-proxy/generate.uc'
+PROBE_CONFIG='/usr/libexec/socks-proxy/probe-config.uc'
+PROG='/usr/bin/sing-box'
+LOCK_DIR='/var/lock/socks-proxy-check.lock'
+TMP_DIR=''
+PID_FILE=''
+
+sanitize() {
+	printf '%s' "$1" | sed -r 's/\x1B\[[0-9;]*[mK]//g' | tr '\r\n=' '   ' | cut -c1-300
+}
+
+result() {
+	echo "ok=$1"
+	echo "mode=$MODE"
+	echo "section=$SECTION"
+	echo "http_code=${2:-}"
+	echo "latency_ms=${3:-}"
+	echo "message=$(sanitize "$4")"
+	exit 0
+}
+
+cleanup() {
+	if [ -n "$PID_FILE" ] && [ -s "$PID_FILE" ]; then
+		start-stop-daemon -K -p "$PID_FILE" -s TERM >/dev/null 2>&1 || true
+		sleep 1
+		start-stop-daemon -K -p "$PID_FILE" -s KILL >/dev/null 2>&1 || true
+	fi
+
+	case "$TMP_DIR" in
+	/tmp/socks-proxy-check.*)
+		rm -f "$TMP_DIR/config.json" "$TMP_DIR/process.log" "$TMP_DIR/curl.log" "$TMP_DIR/pid"
+		rmdir "$TMP_DIR" 2>/dev/null || true
+		;;
+	esac
+
+	if [ -d "$LOCK_DIR" ] && [ "$(cat "$LOCK_DIR/owner" 2>/dev/null)" = "$$" ]; then
+		rm -f "$LOCK_DIR/owner"
+		rmdir "$LOCK_DIR" 2>/dev/null || true
+	fi
+}
+
+trap cleanup EXIT INT TERM
+
+case "$MODE" in
+	node|listener) ;;
+	*) result 0 '' '' '不支持的检测类型' ;;
+esac
+
+case "$SECTION" in
+	''|*[!A-Za-z0-9_]*) result 0 '' '' '配置项 ID 无效' ;;
+esac
+
+section_type="$(uci -q get "socks-proxy.$SECTION")"
+[ "$section_type" = "$MODE" ] || result 0 '' '' '找不到对应的配置项，请先保存并应用设置'
+
+enabled="$(uci -q get "socks-proxy.$SECTION.enabled")"
+[ "$enabled" != '0' ] || result 0 '' '' '该项目尚未启用'
+
+probe_url="$(uci -q get socks-proxy.global.probe_url)"
+[ -n "$probe_url" ] || probe_url='https://www.gstatic.com/generate_204'
+timeout="$(uci -q get socks-proxy.global.probe_timeout)"
+case "$timeout" in
+	''|*[!0-9]*) timeout=15 ;;
+esac
+[ "$timeout" -ge 3 ] 2>/dev/null || timeout=3
+[ "$timeout" -le 60 ] 2>/dev/null || timeout=60
+
+run_curl() {
+	protocol="$1"
+	host="$2"
+	port="$3"
+	username="$4"
+	password="$5"
+	curl_log="$6"
+	output=''
+	rc=0
+
+	if [ "$protocol" = 'http' ]; then
+		if [ -n "$username" ]; then
+			output="$(curl -sS --connect-timeout "$timeout" --max-time "$timeout" \
+				--proxy "http://$host:$port" --proxy-user "$username:$password" \
+				-o /dev/null -w '%{http_code} %{time_total}' "$probe_url" 2>"$curl_log")" || rc=$?
+		else
+			output="$(curl -sS --connect-timeout "$timeout" --max-time "$timeout" \
+				--proxy "http://$host:$port" \
+				-o /dev/null -w '%{http_code} %{time_total}' "$probe_url" 2>"$curl_log")" || rc=$?
+		fi
+	else
+		if [ -n "$username" ]; then
+			output="$(curl -sS --connect-timeout "$timeout" --max-time "$timeout" \
+				--socks5-hostname "$host:$port" --proxy-user "$username:$password" \
+				-o /dev/null -w '%{http_code} %{time_total}' "$probe_url" 2>"$curl_log")" || rc=$?
+		else
+			output="$(curl -sS --connect-timeout "$timeout" --max-time "$timeout" \
+				--socks5-hostname "$host:$port" \
+				-o /dev/null -w '%{http_code} %{time_total}' "$probe_url" 2>"$curl_log")" || rc=$?
+		fi
+	fi
+
+	set -- $output
+	http_code="$1"
+	elapsed="$2"
+	latency_ms="$(awk -v seconds="${elapsed:-0}" 'BEGIN { printf "%.0f", seconds * 1000 }')"
+
+	if [ "$rc" -ne 0 ]; then
+		message="$(tail -n 1 "$curl_log" 2>/dev/null)"
+		[ -n "$message" ] || message="curl 检测失败，退出码 $rc"
+		if [ "$MODE" = 'node' ] && [ -s "$TMP_DIR/process.log" ]; then
+			proxy_error="$(tail -n 1 "$TMP_DIR/process.log" 2>/dev/null)"
+			[ -z "$proxy_error" ] || message="$message；sing-box：$proxy_error"
+		fi
+		result 0 "${http_code:-000}" "$latency_ms" "$message"
+	fi
+
+	case "$http_code" in
+		2??|3??) result 1 "$http_code" "$latency_ms" '连接成功' ;;
+		*) result 0 "${http_code:-000}" "$latency_ms" "代理已连接，但检测地址返回 HTTP ${http_code:-000}" ;;
+	esac
+}
+
+if [ "$MODE" = 'listener' ]; then
+	protocol="$(uci -q get "socks-proxy.$SECTION.protocol")"
+	port="$(uci -q get "socks-proxy.$SECTION.port")"
+	bind_mode="$(uci -q get "socks-proxy.$SECTION.bind_mode")"
+	host='127.0.0.1'
+	[ "$bind_mode" = 'lan' ] || host="$(uci -q get "socks-proxy.$SECTION.listen_address")"
+	[ -n "$host" ] || host='127.0.0.1'
+
+	case "$protocol" in
+		socks|mixed) curl_protocol='socks' ;;
+		http) curl_protocol='http' ;;
+		*) result 0 '' '' '监听协议无效' ;;
+	esac
+	case "$port" in
+		''|*[!0-9]*) result 0 '' '' '监听端口无效' ;;
+	esac
+
+	username=''
+	password=''
+	if [ "$(uci -q get "socks-proxy.$SECTION.auth_enabled")" = '1' ]; then
+		username="$(uci -q get "socks-proxy.$SECTION.username")"
+		password="$(uci -q get "socks-proxy.$SECTION.password")"
+	fi
+
+	TMP_DIR="/tmp/socks-proxy-check.$$"
+	mkdir -m 700 "$TMP_DIR" 2>/dev/null || result 0 '' '' '无法创建检测临时目录'
+	run_curl "$curl_protocol" "$host" "$port" "$username" "$password" "$TMP_DIR/curl.log"
+fi
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+	owner="$(cat "$LOCK_DIR/owner" 2>/dev/null)"
+	if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+		rm -f "$LOCK_DIR/owner"
+		rmdir "$LOCK_DIR" 2>/dev/null || true
+		mkdir "$LOCK_DIR" 2>/dev/null || result 0 '' '' '另一项节点检测正在运行'
+	else
+		result 0 '' '' '另一项节点检测正在运行'
+	fi
+fi
+echo "$$" > "$LOCK_DIR/owner"
+
+TMP_DIR="/tmp/socks-proxy-check.$$"
+mkdir -m 700 "$TMP_DIR" 2>/dev/null || result 0 '' '' '无法创建检测临时目录'
+PID_FILE="$TMP_DIR/pid"
+
+port=''
+for candidate in $(seq 19080 19120); do
+	if ! netstat -lnt 2>/dev/null | awk '{ print $4 }' | grep -q ":$candidate$"; then
+		port="$candidate"
+		break
+	fi
+done
+[ -n "$port" ] || result 0 '' '' '没有可用的本地检测端口'
+
+if ! "$GENERATOR" | "$PROBE_CONFIG" "$SECTION" "$port" > "$TMP_DIR/config.json"; then
+	result 0 '' '' '无法生成该节点的检测配置，请检查节点参数'
+fi
+
+if ! "$PROG" check -c "$TMP_DIR/config.json" >"$TMP_DIR/process.log" 2>&1; then
+	result 0 '' '' "sing-box 配置无效：$(tail -n 1 "$TMP_DIR/process.log")"
+fi
+
+if ! start-stop-daemon -S -b -m -p "$PID_FILE" -c root:nogroup \
+	-x "$PROG" -O "$TMP_DIR/process.log" -- run -c "$TMP_DIR/config.json"; then
+	result 0 '' '' '无法启动节点检测进程'
+fi
+
+ready=0
+for attempt in 1 2 3 4 5; do
+	if netstat -lnt 2>/dev/null | awk '{ print $4 }' | grep -q ":$port$"; then
+		ready=1
+		break
+	fi
+	sleep 1
+done
+
+if [ "$ready" != '1' ]; then
+	message="$(tail -n 1 "$TMP_DIR/process.log" 2>/dev/null)"
+	[ -n "$message" ] || message='节点检测进程未能开始监听'
+	result 0 '' '' "$message"
+fi
+
+run_curl 'socks' '127.0.0.1' "$port" '' '' "$TMP_DIR/curl.log"

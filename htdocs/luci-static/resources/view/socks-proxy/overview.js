@@ -36,6 +36,16 @@ return view.extend({
 		o.readonly = true;
 		o.description = _('服务以 root:nogroup（GID 65534）身份运行。当前 OpenClash 输出规则会放行属于该组的连接。');
 
+		o = s.option(form.Value, 'probe_url', _('可用性检测地址'));
+		o.default = 'https://www.gstatic.com/generate_204';
+		o.placeholder = 'https://www.gstatic.com/generate_204';
+		o.description = _('节点和监听代理检测会通过代理访问此地址。HTTP 2xx 或 3xx 响应视为可用。');
+
+		o = s.option(form.Value, 'probe_timeout', _('检测超时（秒）'));
+		o.datatype = 'range(3,60)';
+		o.default = '15';
+		o.placeholder = '15';
+
 		s = m.section(form.GridSection, 'listener', _('代理监听端口'));
 		s.anonymous = true;
 		s.addremove = true;

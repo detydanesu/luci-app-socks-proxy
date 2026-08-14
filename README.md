@@ -11,6 +11,7 @@ policy-routing or traffic-forwarding rules.
 - Optional username/password authentication per listener.
 - Local-only (`127.0.0.1`) or LAN (`0.0.0.0`) binding.
 - Share-link and subscription import for common proxy protocols.
+- Active availability checks for individual nodes and established listeners.
 - The sing-box service runs as `root:nogroup` (GID 65534). On OpenClash
   installations whose output chains contain `meta skgid 65534 return`, this
   bypasses OpenClash without changing its configuration.
@@ -47,7 +48,7 @@ Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
 APK to the router and install it with:
 
 ```sh
-apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.1.0-r2.apk
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r1.apk
 ```
 
 The package itself is architecture independent. Its dependencies, especially

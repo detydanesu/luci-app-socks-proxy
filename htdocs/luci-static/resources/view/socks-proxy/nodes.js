@@ -141,6 +141,11 @@ return view.extend({
 		o = s.taboption('transport', form.Value, 'server_name', _('TLS 服务器名称'));
 		o.depends('tls', '1');
 
+		o = s.taboption('transport', form.Value, 'tls_alpn', _('TLS ALPN'));
+		o.depends('tls', '1');
+		o.placeholder = _('多个值用英文逗号分隔；TUIC 默认使用 h3');
+		o.description = _('TUIC 通常需要 h3。订阅链接中的 alpn 参数会自动导入。');
+
 		o = s.taboption('transport', form.Flag, 'insecure', _('允许不安全的 TLS'));
 		o.depends('tls', '1');
 		o.default = '0';
