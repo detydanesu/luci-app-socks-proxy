@@ -36,6 +36,23 @@ return view.extend({
 		o.readonly = true;
 		o.description = _('服务以 root:nogroup（GID 65534）身份运行。当前 OpenClash 输出规则会放行属于该组的连接。');
 
+		o = s.option(form.Flag, 'dns_enabled', _('启用独立 DNS'));
+		o.default = '1';
+		o.rmempty = false;
+		o.description = _('仅在本插件的 sing-box 配置中使用指定 DNS，不修改 OpenClash、dnsmasq 或路由器 DNS 设置。');
+
+		o = s.option(form.Value, 'dns_server', _('独立 DNS 服务器'));
+		o.datatype = 'ipaddr';
+		o.default = '223.5.5.5';
+		o.placeholder = '223.5.5.5';
+		o.depends('dns_enabled', '1');
+		o.description = _('用于避免 OpenClash Fake-IP（198.18.x.x）影响节点服务器域名解析。');
+
+		o = s.option(form.Value, 'dns_server_port', _('独立 DNS 端口'));
+		o.datatype = 'port';
+		o.default = '53';
+		o.depends('dns_enabled', '1');
+
 		o = s.option(form.Value, 'probe_url', _('可用性检测地址'));
 		o.default = 'https://www.gstatic.com/generate_204';
 		o.placeholder = 'https://www.gstatic.com/generate_204';
