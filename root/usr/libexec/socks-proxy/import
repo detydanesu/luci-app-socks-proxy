@@ -3,6 +3,34 @@
 IMPORTER='/usr/libexec/socks-proxy/import.uc'
 mode="$1"
 
+run_import() {
+	result_file="$(mktemp /tmp/socks-proxy-import-result.XXXXXX)" || {
+		echo '{"success":false,"error":"无法创建导入结果临时文件"}'
+		return 1
+	}
+
+	/usr/bin/ucode "$@" >"$result_file"
+	rc="$?"
+
+	if [ "$rc" -eq 0 ] && grep -q '"success"[[:space:]]*:[[:space:]]*true' "$result_file"; then
+		reload_error="$(/etc/init.d/socks-proxy reload 2>&1)"
+		if [ "$?" -ne 0 ]; then
+			logger -t socks-proxy "导入成功但本插件服务重载失败：$(printf '%s' "$reload_error" | tail -n 1)"
+			rm -f "$result_file"
+			echo '{"success":false,"error":"节点已导入，但本插件服务重载失败，请查看服务状态和日志"}'
+			return 1
+		fi
+	fi
+
+	if [ -s "$result_file" ]; then
+		cat "$result_file"
+	else
+		echo '{"success":false,"error":"导入程序没有返回结果"}'
+	fi
+	rm -f "$result_file"
+	return "$rc"
+}
+
 case "$mode" in
 	file)
 	input="$2"
@@ -16,7 +44,7 @@ case "$mode" in
 		exit 2
 	}
 	trap 'rm -f /tmp/socks-proxy-import.txt' EXIT INT TERM
-	/usr/bin/ucode -D mode=file -D "replace_existing=$replace_existing" \
+	run_import -D mode=file -D "replace_existing=$replace_existing" \
 		-D "input_path=$input" "$IMPORTER"
 	;;
 
@@ -54,7 +82,7 @@ case "$mode" in
 		exit 1
 	fi
 
-	/usr/bin/ucode -D mode=subscription -D "section=$section" \
+	run_import -D mode=subscription -D "section=$section" \
 		-D "input_path=$tmp" "$IMPORTER"
 	;;
 

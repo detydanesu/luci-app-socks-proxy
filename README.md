@@ -11,6 +11,13 @@ policy-routing or traffic-forwarding rules.
 - Optional username/password authentication per listener.
 - Local-only (`127.0.0.1`) or LAN (`0.0.0.0`) binding.
 - Share-link and subscription import for common proxy protocols.
+- Imported subscriptions are applied by reloading only this plugin; OpenClash
+  configuration is never written or reloaded.
+- The generated sing-box configuration uses an independent DNS server by
+  default, avoiding OpenClash Fake-IP answers for node server domains.
+- The Nodes page groups imported entries by subscription URL and keeps each
+  group collapsed until it is expanded.
+- Active availability checks for individual nodes and established listeners.
 - The sing-box service runs as `root:nogroup` (GID 65534). On OpenClash
   installations whose output chains contain `meta skgid 65534 return`, this
   bypasses OpenClash without changing its configuration.
@@ -47,7 +54,7 @@ Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
 APK to the router and install it with:
 
 ```sh
-apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.1.0-r2.apk
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r3.apk
 ```
 
 The package itself is architecture independent. Its dependencies, especially
@@ -62,6 +69,15 @@ The package itself is architecture independent. Its dependencies, especially
    selects SOCKS5, HTTP or mixed mode, a node, local/LAN binding and optional
    authentication.
 4. Enable the service and apply the configuration.
+
+The service settings include an independent DNS server (default
+`223.5.5.5`). This setting is written only to `/etc/config/socks-proxy` and
+is embedded in the plugin's sing-box configuration; it does not change
+OpenClash or dnsmasq.
+
+Each node row on the Nodes page includes its own availability check. The
+listener checks remain on the Status page; node checks are no longer shown
+there.
 
 Listener credentials are stored in `/etc/config/socks-proxy`. Keep that file
 mode `0600`. The generated runtime configuration is also written with mode

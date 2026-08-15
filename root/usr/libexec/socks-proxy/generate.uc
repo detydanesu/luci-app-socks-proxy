@@ -24,6 +24,32 @@ function nonempty(value) {
 	return value != null && value != '';
 }
 
+/*
+ * OpenClash may run dnsmasq in fake-ip mode and return 198.18.0.0/15 for
+ * ordinary system DNS lookups.  Keep name resolution inside this sing-box
+ * instance instead of changing OpenClash's DNS or firewall configuration.
+ */
+function dns_config() {
+	if (global.dns_enabled != null && !bool(global.dns_enabled))
+		return null;
+
+	const server = global.dns_server || '223.5.5.5';
+	const port = nonempty(global.dns_server_port) ? integer(global.dns_server_port, 53) : 53;
+	if (!nonempty(server) || port <= 0)
+		return null;
+
+	return {
+		servers: [{
+			type: 'udp',
+			tag: 'socks-proxy-dns',
+			server,
+			server_port: port
+		}],
+		final: 'socks-proxy-dns',
+		strategy: 'prefer_ipv4'
+	};
+}
+
 function tls_config(node) {
 	if (!bool(node.tls))
 		return null;
@@ -33,6 +59,18 @@ function tls_config(node) {
 		server_name: node.server_name || node.server,
 		insecure: bool(node.insecure)
 	};
+	const alpn_value = node.tls_alpn || (node.type == 'tuic' ? 'h3' : '');
+	if (nonempty(alpn_value)) {
+		const values = split(alpn_value, ',');
+		const alpn = [];
+		for (let i = 0; i < length(values); i++) {
+			const value = trim(values[i]);
+			if (nonempty(value))
+				push(alpn, value);
+		}
+		if (length(alpn))
+			tls.alpn = alpn;
+	}
 
 	if (nonempty(node.utls_fingerprint))
 		tls.utls = { enabled: true, fingerprint: node.utls_fingerprint };
@@ -225,5 +263,9 @@ const config = {
 		final: 'direct'
 	}
 };
+
+const dns = dns_config();
+if (dns != null)
+	config.dns = dns;
 
 print(config);

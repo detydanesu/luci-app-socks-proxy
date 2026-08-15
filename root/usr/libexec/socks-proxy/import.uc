@@ -96,6 +96,7 @@ function apply_tls_transport(node, params) {
 
 	node.server_name = params.sni || params.serverName || params.peer || '';
 	node.insecure = (params.insecure == '1' || params.allowInsecure == '1') ? '1' : '0';
+	node.tls_alpn = params.alpn || '';
 	node.utls_fingerprint = params.fp || '';
 	node.reality_public_key = params.pbk || params.publicKey || '';
 	node.reality_short_id = params.sid || params.shortId || '';
@@ -134,6 +135,7 @@ function parse_vmess(uri) {
 		transport_path: data.path || '',
 		transport_host: data.host || '',
 		grpc_service_name: data.path || data.serviceName || '',
+		tls_alpn: data.alpn || '',
 		utls_fingerprint: data.fp || ''
 	};
 
@@ -217,6 +219,7 @@ function parse_standard(uri) {
 		node.obfs_password = parsed.params['obfs-password'] || parsed.params.obfs_password || '';
 		node.up_mbps = parsed.params.upmbps || parsed.params.up || '';
 		node.down_mbps = parsed.params.downmbps || parsed.params.down || '';
+		node.tls_alpn = parsed.params.alpn || '';
 		break;
 	case 'tuic':
 		node.type = 'tuic';
@@ -227,6 +230,7 @@ function parse_standard(uri) {
 		node.insecure = (parsed.params.allow_insecure == '1' || parsed.params.insecure == '1') ? '1' : '0';
 		node.congestion_control = parsed.params.congestion_control || 'bbr';
 		node.udp_relay_mode = parsed.params.udp_relay_mode || 'native';
+		node.tls_alpn = parsed.params.alpn || 'h3';
 		break;
 	case 'socks':
 	case 'socks5':
@@ -242,6 +246,7 @@ function parse_standard(uri) {
 		node.password = second;
 		node.tls = parsed.scheme == 'https' ? '1' : '0';
 		node.server_name = parsed.params.sni || authority.host;
+		node.tls_alpn = parsed.params.alpn || '';
 		break;
 	default:
 		return null;
@@ -283,6 +288,7 @@ function write_node(node, source) {
 }
 
 let source;
+let legacy_source;
 let content;
 let replace_existing = false;
 
@@ -293,7 +299,13 @@ if (mode == 'file') {
 }
 else if (mode == 'subscription') {
 	content = readfile(input_path) || '';
-	source = `subscription:${section}`;
+	legacy_source = `subscription:${section}`;
+	let source_key = uci.get('socks-proxy', section, 'source_key');
+	if (!nonempty(source_key)) {
+		source_key = uci.get('socks-proxy', section, 'url') || section;
+		uci.set('socks-proxy', section, 'source_key', source_key);
+	}
+	source = `subscription:${source_key}`;
 }
 else {
 	print({ success: false, error: '无效的导入模式' });
@@ -331,6 +343,8 @@ if (!length(parsed_nodes)) {
 }
 
 delete_source(source, replace_existing);
+if (nonempty(legacy_source) && legacy_source != source)
+	delete_source(legacy_source, false);
 for (let i = 0; i < length(parsed_nodes); i++)
 	write_node(parsed_nodes[i], source);
 

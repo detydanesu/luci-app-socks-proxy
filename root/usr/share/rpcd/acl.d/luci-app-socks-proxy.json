@@ -13,6 +13,7 @@
 		"write": {
 			"file": {
 				"/tmp/socks-proxy-import.txt": [ "write" ],
+				"/usr/libexec/socks-proxy/check": [ "exec" ],
 				"/usr/libexec/socks-proxy/import": [ "exec" ],
 				"/etc/init.d/socks-proxy start": [ "exec" ],
 				"/etc/init.d/socks-proxy stop": [ "exec" ],
