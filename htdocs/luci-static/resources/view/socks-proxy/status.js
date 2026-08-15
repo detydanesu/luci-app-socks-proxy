@@ -107,7 +107,6 @@ return view.extend({
 		var values = parseValues(data[1].stdout);
 		var running = values.running === '1';
 		var gidOk = values.gid === '65534';
-		var nodes = uci.sections('socks-proxy', 'node');
 		var listeners = uci.sections('socks-proxy', 'listener');
 
 		return E([], [
@@ -128,12 +127,9 @@ return view.extend({
 				' ',
 				E('button', { 'class': 'btn cbi-button-negative', 'click': ui.createHandlerFn(this, 'handleAction', 'stop') }, _('停止'))
 			]),
-			E('p', { 'class': 'cbi-section-descr' }, _('节点检测会临时启动一个仅本机可访问的 SOCKS5 端口，并以 nogroup 身份直连测试；监听代理检测会通过已经建立的代理端口发起真实请求。')),
+			E('p', { 'class': 'cbi-section-descr' }, _('监听代理检测会通过已经建立的代理端口发起真实请求；节点检测已集成到“节点”页面的每个节点卡片中。')),
 			this.probeTable('listener', _('已建立代理可用性'), listeners, function(listener) {
 				return (listener.protocol || 'socks').toUpperCase() + ' · ' + (listener.bind_mode === 'lan' ? '0.0.0.0' : (listener.listen_address || '127.0.0.1')) + ':' + (listener.port || '-');
-			}),
-			this.probeTable('node', _('节点可用性'), nodes, function(node) {
-				return (node.type || '-').toUpperCase() + ' · ' + (node.server || '-') + ':' + (node.server_port || '-');
 			})
 		]);
 	},

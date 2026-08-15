@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require form';
+'require fs';
 'require uci';
 
 return view.extend({
@@ -8,30 +9,181 @@ return view.extend({
 		return uci.load('socks-proxy');
 	},
 
-	groupRows: function(root) {
-		var table = root.querySelector('#cbi-socks-proxy-node');
+	parseProbeOutput: function(output) {
+		var values = {};
+		(output || '').trim().split(/\n/).forEach(function(line) {
+			var p = line.indexOf('=');
+			if (p > -1)
+				values[line.substring(0, p)] = line.substring(p + 1);
+		});
+		return values;
+	},
+
+	handleNodeProbe: function(section, button, output) {
+		button.disabled = true;
+		button.setAttribute('aria-busy', 'true');
+		output.style.color = '';
+		output.textContent = _('检测中…');
+
+		return fs.exec('/usr/libexec/socks-proxy/check', [ 'node', section ]).then(L.bind(function(res) {
+			var values = this.parseProbeOutput(res.stdout);
+			var success = values.ok === '1';
+			var parts = [ success ? _('可用') : _('不可用') ];
+
+			if (values.latency_ms)
+				parts.push(values.latency_ms + ' ms');
+			if (values.http_code)
+				parts.push('HTTP ' + values.http_code);
+			if (values.message)
+				parts.push(values.message);
+
+			output.style.color = success ? '#16a34a' : '#dc2626';
+			output.textContent = parts.join(' · ');
+		}, this)).catch(function(err) {
+			output.style.color = '#dc2626';
+			output.textContent = _('检测执行失败：') + (err.message || err);
+		}).finally(function() {
+			button.disabled = false;
+			button.removeAttribute('aria-busy');
+		});
+	},
+
+	addNodeAvailability: function(root) {
+		var container = root && root.querySelector ? root : document;
+		var table = container.querySelector('#cbi-socks-proxy-node');
 		var tbody = table && table.querySelector('tbody.cbi-section-tbody');
 		if (!tbody)
-			return root;
-		if (tbody.querySelector('tr.cbi-section-table-group'))
+			return;
+
+		var view = this;
+		Array.prototype.slice.call(
+			tbody.querySelectorAll('tr.cbi-section-table-row[data-sid]')
+		).forEach(function(row) {
+			if (row.querySelector('.socks-proxy-node-availability'))
+				return;
+
+			var section = row.getAttribute('data-sid');
+			var nameCell = row.children[1] || row.lastElementChild;
+			if (!nameCell || !section)
+				return;
+
+			var output = E('span', {
+				'class': 'socks-proxy-node-availability-result'
+			}, _('尚未检测'));
+			var button = E('button', {
+				'type': 'button',
+				'class': 'btn cbi-button-action cbi-button-small',
+				'style': 'margin-left:0.5em;',
+				'title': _('通过该节点访问检测地址')
+			}, _('检测'));
+
+			button.addEventListener('click', function(ev) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				return view.handleNodeProbe(section, button, output);
+			});
+
+			nameCell.appendChild(E('div', {
+				'class': 'socks-proxy-node-availability',
+				'style': 'margin-top:0.35em;display:flex;align-items:center;flex-wrap:wrap;gap:0.25em;'
+			}, [
+				E('span', { 'class': 'socks-proxy-node-availability-label' }, _('可用性：')),
+				output,
+				button
+			]));
+		});
+	},
+
+	groupRows: function(root) {
+		/*
+		 * Map.renderContents() is not the only path that can create this table:
+		 * recent LuCI versions rebuild it after save, reset, and dependency
+		 * updates. Accept the returned map element when available and fall back
+		 * to the document so the grouping also works after those rebuilds.
+		 */
+		var container = root && root.querySelector ? root : document;
+		var table = container.querySelector('#cbi-socks-proxy-node');
+		var tbody = table && table.querySelector('tbody.cbi-section-tbody');
+		if (!tbody)
 			return root;
 
 		var rows = Array.prototype.slice.call(
 			tbody.querySelectorAll('tr.cbi-section-table-row[data-sid]')
 		);
-		if (!rows.length)
+		if (!rows.length) {
+			this.addNodeAvailability(root);
 			return root;
+		}
+		if (tbody.querySelector('tr.cbi-section-table-group')) {
+			this.addNodeAvailability(root);
+			return root;
+		}
+
+		var nodesById = {};
+		uci.sections('socks-proxy', 'node').forEach(function(node) {
+			nodesById[node['.name']] = node;
+		});
+
+		var subscriptionsById = {};
+		var subscriptionsByKey = {};
+		var subscriptionList = uci.sections('socks-proxy', 'subscription');
+		subscriptionList.forEach(function(subscription) {
+			subscriptionsById[subscription['.name']] = subscription;
+			if (subscription.source_key)
+				subscriptionsByKey[subscription.source_key] = subscription;
+			if (subscription.url)
+				subscriptionsByKey[subscription.url] = subscription;
+		});
+
+		/*
+		 * Older imports stored the anonymous UCI section ID in source. Those IDs
+		 * can change after a commit, so associate an orphaned source with an
+		 * otherwise unclaimed subscription when possible. New imports use the
+		 * persistent source_key below and do not need this compatibility path.
+		 */
+		var sourceOrder = [];
+		var sourceSeen = {};
+		rows.forEach(function(row) {
+			var node = nodesById[row.getAttribute('data-sid')] || {};
+			var source = node.source || '';
+			if (source.indexOf('subscription:') !== 0)
+				return;
+			var key = source.substr('subscription:'.length);
+			if (!sourceSeen[key]) {
+				sourceSeen[key] = true;
+				sourceOrder.push(key);
+			}
+		});
+
+		var claimedSubscriptions = {};
+		sourceOrder.forEach(function(key) {
+			var subscription = subscriptionsById[key] || subscriptionsByKey[key];
+			if (subscription)
+				claimedSubscriptions[subscription['.name']] = true;
+		});
+
+		var unclaimedSubscriptions = subscriptionList.filter(function(subscription) {
+			return !claimedSubscriptions[subscription['.name']];
+		});
+		var legacySubscriptions = {};
+		sourceOrder.forEach(function(key) {
+			if (subscriptionsById[key] || subscriptionsByKey[key] || !unclaimedSubscriptions.length)
+				return;
+			legacySubscriptions[key] = unclaimedSubscriptions.shift();
+		});
 
 		var groups = {};
 		var order = [];
 		var getInfo = function(source) {
 			if (source && source.indexOf('subscription:') === 0) {
-				var section_id = source.substr('subscription:'.length);
-				var name = uci.get('socks-proxy', section_id, 'name') || section_id;
-				var url = uci.get('socks-proxy', section_id, 'url') || '';
+				var source_key = source.substr('subscription:'.length);
+				var subscription = subscriptionsById[source_key] ||
+					subscriptionsByKey[source_key] || legacySubscriptions[source_key] || {};
+				var name = subscription.name || source_key;
+				var url = subscription.url || '';
 				return {
-					key: url || source,
-					title: _('订阅') + '：' + name,
+					key: url || subscription.source_key || source,
+					title: _('订阅') + '：' + (name || source_key),
 					detail: this.maskUrl(url)
 				};
 			}
@@ -45,7 +197,8 @@ return view.extend({
 
 		rows.forEach(function(row) {
 			var sid = row.getAttribute('data-sid');
-			var source = uci.get('socks-proxy', sid, 'source') || '';
+			var node = nodesById[sid] || {};
+			var source = node.source || uci.get('socks-proxy', sid, 'source') || '';
 			var info = getInfo(source);
 			var key = 'group:' + info.key;
 			if (!groups[key]) {
@@ -98,6 +251,8 @@ return view.extend({
 				tbody.appendChild(row);
 			});
 		});
+
+		this.addNodeAvailability(root);
 
 		return root;
 	},
@@ -303,13 +458,26 @@ return view.extend({
 			s.children[i].modalonly = true;
 
 		var view = this;
-		var renderContents = m.renderContents;
-		m.renderContents = function() {
-			return renderContents.apply(this, arguments).then(function(root) {
-				return view.groupRows(root);
-			});
-		};
+		return m.render().then(function(root) {
+			var applyGrouping = function() {
+				view.groupRows(root);
+			};
 
-		return m.render();
+			applyGrouping();
+			setTimeout(applyGrouping, 0);
+
+			/* Re-apply after LuCI replaces the table during save/reset. */
+			if (root && root.querySelector && typeof MutationObserver != 'undefined') {
+				if (root.__socksProxyGroupObserver)
+					root.__socksProxyGroupObserver.disconnect();
+				root.__socksProxyGroupObserver = new MutationObserver(applyGrouping);
+				root.__socksProxyGroupObserver.observe(root, {
+					childList: true,
+					subtree: true
+				});
+			}
+
+			return root;
+		});
 	}
 });

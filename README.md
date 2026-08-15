@@ -54,7 +54,7 @@ Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
 APK to the router and install it with:
 
 ```sh
-apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r2.apk
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r3.apk
 ```
 
 The package itself is architecture independent. Its dependencies, especially
@@ -74,6 +74,10 @@ The service settings include an independent DNS server (default
 `223.5.5.5`). This setting is written only to `/etc/config/socks-proxy` and
 is embedded in the plugin's sing-box configuration; it does not change
 OpenClash or dnsmasq.
+
+Each node row on the Nodes page includes its own availability check. The
+listener checks remain on the Status page; node checks are no longer shown
+there.
 
 Listener credentials are stored in `/etc/config/socks-proxy`. Keep that file
 mode `0600`. The generated runtime configuration is also written with mode

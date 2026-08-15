@@ -288,6 +288,7 @@ function write_node(node, source) {
 }
 
 let source;
+let legacy_source;
 let content;
 let replace_existing = false;
 
@@ -298,7 +299,13 @@ if (mode == 'file') {
 }
 else if (mode == 'subscription') {
 	content = readfile(input_path) || '';
-	source = `subscription:${section}`;
+	legacy_source = `subscription:${section}`;
+	let source_key = uci.get('socks-proxy', section, 'source_key');
+	if (!nonempty(source_key)) {
+		source_key = uci.get('socks-proxy', section, 'url') || section;
+		uci.set('socks-proxy', section, 'source_key', source_key);
+	}
+	source = `subscription:${source_key}`;
 }
 else {
 	print({ success: false, error: '无效的导入模式' });
@@ -336,6 +343,8 @@ if (!length(parsed_nodes)) {
 }
 
 delete_source(source, replace_existing);
+if (nonempty(legacy_source) && legacy_source != source)
+	delete_source(legacy_source, false);
 for (let i = 0; i < length(parsed_nodes); i++)
 	write_node(parsed_nodes[i], source);
 
