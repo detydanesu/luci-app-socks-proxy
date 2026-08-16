@@ -17,6 +17,9 @@ policy-routing or traffic-forwarding rules.
   default, avoiding OpenClash Fake-IP answers for node server domains.
 - The Nodes page groups imported entries by subscription URL and keeps each
   group collapsed until it is expanded.
+- Subscription refreshes use a persistent source key, reuse existing node
+  sections where possible, and remove recognizable orphaned copies left by
+  older versions.
 - Active availability checks for individual nodes and established listeners.
 - The sing-box service runs as `root:nogroup` (GID 65534). On OpenClash
   installations whose output chains contain `meta skgid 65534 return`, this
@@ -54,7 +57,7 @@ Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
 APK to the router and install it with:
 
 ```sh
-apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r3.apk
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r4.apk
 ```
 
 The package itself is architecture independent. Its dependencies, especially
@@ -64,11 +67,15 @@ The package itself is architecture independent. Its dependencies, especially
 
 1. Open **Services → SOCKS/HTTP Proxy → Import** to paste share links or add a
    subscription URL.
-2. Confirm or edit imported nodes on the **Nodes** page.
-3. Add one or more listeners under **Settings**. Each listener independently
+2. For subscriptions whose server uses a legacy or self-signed certificate,
+   open the subscription editor and enable **Skip certificate verification**.
+   Click **Update nodes** afterward; the setting is applied only to nodes
+   imported from that subscription.
+3. Confirm or edit imported nodes on the **Nodes** page.
+4. Add one or more listeners under **Settings**. Each listener independently
    selects SOCKS5, HTTP or mixed mode, a node, local/LAN binding and optional
    authentication.
-4. Enable the service and apply the configuration.
+5. Enable the service and apply the configuration.
 
 The service settings include an independent DNS server (default
 `223.5.5.5`). This setting is written only to `/etc/config/socks-proxy` and

@@ -12,6 +12,10 @@ function nonempty(value) {
 	return value != null && value != '';
 }
 
+function truthy(value) {
+	return value == true || value == 1 || value == '1' || value == 'true';
+}
+
 function decode64(value) {
 	let text = replace(replace(trim(value), /-/g, '+'), /_/g, '/');
 	while (length(text) % 4)
@@ -276,8 +280,120 @@ function delete_source(source, delete_all) {
 		uci.delete('socks-proxy', sections[i]);
 }
 
-function write_node(node, source) {
-	const sid = uci.add('socks-proxy', 'node');
+function add_unique(list, seen, value) {
+	if (nonempty(value) && !seen[value]) {
+		seen[value] = true;
+		push(list, value);
+	}
+}
+
+function node_signature(node) {
+	/*
+	 * Names and traffic counters can change between subscription updates. The
+	 * transport endpoint and credentials are a more useful identity when we
+	 * decide whether an existing UCI section can be reused.
+	 */
+	return join('|', [
+		node.type || '',
+		node.server || '',
+		node.server_port || '',
+		node.uuid || '',
+		node.password || '',
+		node.transport || '',
+		node.transport_path || '',
+		node.transport_host || '',
+		node.server_name || '',
+		node.flow || '',
+		node.custom_json || ''
+	]);
+}
+
+function collect_subscription_groups() {
+	const groups = {};
+	const order = [];
+	const seen = {};
+
+	uci.foreach('socks-proxy', 'node', (node) => {
+		const source = node.source || '';
+		if (index(source, 'subscription:') != 0)
+			return;
+
+		const key = substr(source, length('subscription:'));
+		if (!groups[key]) {
+			groups[key] = [];
+			if (!seen[key]) {
+				seen[key] = true;
+				push(order, key);
+			}
+		}
+		push(groups[key], node);
+	});
+
+	return { groups, order };
+}
+
+function collect_subscription_keys() {
+	const keys = {};
+	uci.foreach('socks-proxy', 'subscription', (subscription) => {
+		keys[subscription['.name']] = true;
+		if (nonempty(subscription.source_key))
+			keys[subscription.source_key] = true;
+		if (nonempty(subscription.url))
+			keys[subscription.url] = true;
+	});
+	return keys;
+}
+
+function duplicate_legacy_sources(parsed_nodes, groups) {
+	const result = [];
+	const result_seen = {};
+	const known_keys = collect_subscription_keys();
+	const parsed_signatures = {};
+	const parsed_count = length(parsed_nodes);
+
+	for (let i = 0; i < parsed_count; i++)
+		parsed_signatures[node_signature(parsed_nodes[i])] = true;
+
+	/*
+	 * Before source_key was introduced, a subscription update could leave an
+	 * orphaned group such as subscription:cfg100caa behind. If that group still
+	 * substantially overlaps the freshly downloaded nodes, it is safe to treat
+	 * it as the old copy of this subscription. Only orphaned sources are
+	 * considered, so two live subscriptions with different URLs are preserved.
+	 */
+	for (let i = 0; i < length(groups.order); i++) {
+		const key = groups.order[i];
+		if (known_keys[key] || !groups.groups[key])
+			continue;
+
+		const group = groups.groups[key];
+		let matches = 0;
+		for (let j = 0; j < length(group); j++) {
+			if (parsed_signatures[node_signature(group[j])])
+				matches++;
+		}
+
+		const group_ratio = length(group) ? matches / length(group) : 0;
+		const parsed_ratio = parsed_count ? matches / parsed_count : 0;
+		if (matches >= 2 && (group_ratio >= 0.6 || parsed_ratio >= 0.6))
+			add_unique(result, result_seen, key);
+	}
+
+	return result;
+}
+
+function clear_node_options(section) {
+	const values = uci.get_all('socks-proxy', section) || {};
+	for (let key in values) {
+		if (substr(key, 0, 1) != '.')
+			uci.delete('socks-proxy', section, key);
+	}
+}
+
+function write_node(node, source, section) {
+	const sid = section || uci.add('socks-proxy', 'node');
+	if (section)
+		clear_node_options(section);
 	uci.set('socks-proxy', sid, 'enabled', '1');
 	uci.set('socks-proxy', sid, 'source', source);
 	for (let key in node) {
@@ -287,8 +403,103 @@ function write_node(node, source) {
 	return sid;
 }
 
+function replace_subscription_nodes(parsed_nodes, source_list, source) {
+	const source_seen = {};
+	const existing = [];
+	const existing_by_id = {};
+	const listener_ids = [];
+	const listener_seen = {};
+
+	for (let i = 0; i < length(source_list); i++)
+		source_seen[source_list[i]] = true;
+
+	uci.foreach('socks-proxy', 'node', (node) => {
+		const node_source = node.source || '';
+		if (!source_seen[node_source])
+			return;
+
+		const record = {
+			id: node['.name'],
+			node,
+			used: false
+		};
+		push(existing, record);
+		existing_by_id[record.id] = record;
+	});
+
+	uci.foreach('socks-proxy', 'listener', (listener) => {
+		const id = listener.node || '';
+		if (existing_by_id[id] && !listener_seen[id]) {
+			listener_seen[id] = true;
+			push(listener_ids, id);
+		}
+	});
+
+	/* Keep listener targets at the front so they are reused before stale rows. */
+	const ordered = [];
+	const ordered_seen = {};
+	for (let i = 0; i < length(listener_ids); i++) {
+		const record = existing_by_id[listener_ids[i]];
+		if (record && !ordered_seen[record.id]) {
+			ordered_seen[record.id] = true;
+			push(ordered, record);
+		}
+	}
+	for (let i = 0; i < length(existing); i++) {
+		if (!ordered_seen[existing[i].id]) {
+			ordered_seen[existing[i].id] = true;
+			push(ordered, existing[i]);
+		}
+	}
+
+	const resulting_ids = [];
+	for (let i = 0; i < length(parsed_nodes); i++) {
+		const parsed = parsed_nodes[i];
+		const signature = node_signature(parsed);
+		let record = null;
+
+		for (let j = 0; j < length(ordered); j++) {
+			if (!ordered[j].used && node_signature(ordered[j].node) == signature) {
+				record = ordered[j];
+				break;
+			}
+		}
+		if (!record) {
+			for (let j = 0; j < length(ordered); j++) {
+				if (!ordered[j].used) {
+					record = ordered[j];
+					break;
+				}
+			}
+		}
+
+		const id = write_node(parsed, source, record ? record.id : null);
+		if (record)
+			record.used = true;
+		push(resulting_ids, id);
+	}
+
+	/* If a listener pointed at a removed row, keep it usable on the first new node. */
+	const fallback = resulting_ids[0] || '';
+	for (let i = 0; i < length(ordered); i++) {
+		const record = ordered[i];
+		if (record.used)
+			continue;
+
+		if (listener_seen[record.id] && nonempty(fallback)) {
+			uci.foreach('socks-proxy', 'listener', (listener) => {
+				if (listener.node == record.id)
+					uci.set('socks-proxy', listener['.name'], 'node', fallback);
+			});
+		}
+		uci.delete('socks-proxy', record.id);
+	}
+}
+
 let source;
 let legacy_source;
+let subscription_skip_verify = false;
+let subscription_source_key;
 let content;
 let replace_existing = false;
 
@@ -300,12 +511,13 @@ if (mode == 'file') {
 else if (mode == 'subscription') {
 	content = readfile(input_path) || '';
 	legacy_source = `subscription:${section}`;
-	let source_key = uci.get('socks-proxy', section, 'source_key');
-	if (!nonempty(source_key)) {
-		source_key = uci.get('socks-proxy', section, 'url') || section;
-		uci.set('socks-proxy', section, 'source_key', source_key);
+	subscription_source_key = uci.get('socks-proxy', section, 'source_key');
+	if (!nonempty(subscription_source_key)) {
+		subscription_source_key = uci.get('socks-proxy', section, 'url') || section;
+		uci.set('socks-proxy', section, 'source_key', subscription_source_key);
 	}
-	source = `subscription:${source_key}`;
+	source = `subscription:${subscription_source_key}`;
+	subscription_skip_verify = truthy(uci.get('socks-proxy', section, 'insecure'));
 }
 else {
 	print({ success: false, error: '无效的导入模式' });
@@ -342,11 +554,30 @@ if (!length(parsed_nodes)) {
 	exit(1);
 }
 
-delete_source(source, replace_existing);
-if (nonempty(legacy_source) && legacy_source != source)
-	delete_source(legacy_source, false);
-for (let i = 0; i < length(parsed_nodes); i++)
-	write_node(parsed_nodes[i], source);
+if (subscription_skip_verify) {
+	for (let i = 0; i < length(parsed_nodes); i++)
+		parsed_nodes[i].insecure = '1';
+}
+
+if (mode == 'subscription') {
+	const groups = collect_subscription_groups();
+	const source_list = [];
+	const source_seen = {};
+	add_unique(source_list, source_seen, source);
+	if (nonempty(legacy_source) && legacy_source != source)
+		add_unique(source_list, source_seen, legacy_source);
+
+	const duplicate_sources = duplicate_legacy_sources(parsed_nodes, groups);
+	for (let i = 0; i < length(duplicate_sources); i++)
+		add_unique(source_list, source_seen, `subscription:${duplicate_sources[i]}`);
+
+	replace_subscription_nodes(parsed_nodes, source_list, source);
+}
+else {
+	delete_source(source, replace_existing);
+	for (let i = 0; i < length(parsed_nodes); i++)
+		write_node(parsed_nodes[i], source, null);
+}
 
 uci.commit('socks-proxy');
 print({ success: true, imported: length(parsed_nodes), errors });

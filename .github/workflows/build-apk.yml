@@ -84,7 +84,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-socks-proxy-0.2.0-r3
+          name: luci-app-socks-proxy-0.2.0-r4
           path: |
             dist/*.apk
             dist/SHA256SUMS

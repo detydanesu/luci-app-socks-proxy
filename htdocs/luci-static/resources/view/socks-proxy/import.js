@@ -84,6 +84,12 @@ return view.extend({
 			return true;
 		};
 
+		o = s.option(form.Flag, 'insecure', _('跳过证书验证'));
+		o.default = '0';
+		o.rmempty = false;
+		o.modalonly = true;
+		o.description = _('仅对本订阅导入的 TLS 节点生效；启用后会降低安全性。');
+
 		o = s.option(form.Button, '_update', _('更新'));
 		o.inputtitle = _('更新节点');
 		o.inputstyle = 'apply';
