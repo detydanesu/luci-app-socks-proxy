@@ -57,7 +57,7 @@ Download the APK and `SHA256SUMS` from the GitHub Releases page, then copy the
 APK to the router and install it with:
 
 ```sh
-apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r4.apk
+apk add --allow-untrusted /tmp/luci-app-socks-proxy-0.2.0-r5.apk
 ```
 
 The package itself is architecture independent. Its dependencies, especially
